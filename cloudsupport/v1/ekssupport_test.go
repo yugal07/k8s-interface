@@ -13,7 +13,6 @@ import (
 func TestGetContextName(t *testing.T) {
 	defer tearDown()
 
-	// Test ARN context names
 	mockname1 := "arn:aws:eks:eu-north-1:123456789:cluster-test-cluster"
 	eksSupport := NewEKSSupport()
 	name := eksSupport.GetContextName(mockname1)
@@ -30,7 +29,6 @@ func TestGetContextName(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "eu-north-1", region)
 
-	// Test non-ARN context names (i.e., cluster name is context name)
 	tests := []struct {
 		name                string
 		config              *clientcmdapi.Config
@@ -39,7 +37,7 @@ func TestGetContextName(t *testing.T) {
 		expectedContextName string
 	}{
 		{
-			name: "Config is empty, return empty string",
+			name: "No heuristic matches, falls back to explicit cluster name",
 			config: &clientcmdapi.Config{
 				CurrentContext: "d34db33f",
 				Clusters: map[string]*clientcmdapi.Cluster{
@@ -50,7 +48,7 @@ func TestGetContextName(t *testing.T) {
 			},
 			connected:           true,
 			cluster:             "my-cluster",
-			expectedContextName: "",
+			expectedContextName: "my-cluster",
 		},
 		{
 			name: "Context name is cluster name, connected",
@@ -78,6 +76,20 @@ func TestGetContextName(t *testing.T) {
 			},
 			connected:           false,
 			cluster:             "my-cluster",
+			expectedContextName: "my-cluster",
+		},
+		{
+			name: "No cluster and no matching context, returns empty string",
+			config: &clientcmdapi.Config{
+				CurrentContext: "d34db33f",
+				Clusters: map[string]*clientcmdapi.Cluster{
+					"d34db33f": {
+						Server: "https://my-server.local",
+					},
+				},
+			},
+			connected:           true,
+			cluster:             "",
 			expectedContextName: "",
 		},
 	}
@@ -90,7 +102,6 @@ func TestGetContextName(t *testing.T) {
 			assert.Equal(t, tt.expectedContextName, actualContextName)
 		})
 	}
-
 }
 
 func TestGetRegion(t *testing.T) {
