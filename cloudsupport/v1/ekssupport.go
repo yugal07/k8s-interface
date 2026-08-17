@@ -61,10 +61,6 @@ type ListEntitiesForPolicies struct {
 	EntitiesForPolicies map[string]*iam.ListEntitiesForPolicyOutput `json:"rolesPolicies"`
 }
 
-// =======================================
-//	structs needed for PolicyVersion data
-// =======================================
-
 type PolicyVersionDocument struct {
 	Version   string      `json:"Version"`
 	Statement []Statement `json:"Statement"`
@@ -80,14 +76,11 @@ type ListPolicyVersion struct {
 	PolicyVersion map[string]*PolicyVersionDocument `json:"policiesDocuments"`
 }
 
-// NewEKSSupport returns EKSSupport type
 func NewEKSSupport() *EKSSupport {
 	return &EKSSupport{}
 }
 
-// GetClusterDescribe returns the descriptive info about the cluster running in EKS.
 func (eksSupport *EKSSupport) GetClusterDescribe(cluster string, region string) (*eks.DescribeClusterOutput, error) {
-	// Configure cluster name and region for request
 	awsConfig, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return nil, fmt.Errorf("error: fail to load AWS SDK default %v", err)
@@ -105,14 +98,10 @@ func (eksSupport *EKSSupport) GetClusterDescribe(cluster string, region string) 
 	return result, nil
 }
 
-// GetName returns the name of the eks cluster
 func (eksSupport *EKSSupport) GetName(describe *eks.DescribeClusterOutput) string {
-
-	//getName get cluster name from describe
 	return *describe.Cluster.Name
 }
 
-// GetRegion returns the region in which eks cluster is running.
 func (eksSupport *EKSSupport) GetRegion(cluster string) (string, error) {
 	region, present := os.LookupEnv(KS_CLOUD_REGION_ENV_VAR)
 	if present && region != "" {
@@ -133,7 +122,6 @@ func (eksSupport *EKSSupport) GetRegion(cluster string) (string, error) {
 		return parsed.Region, nil
 	}
 
-	// Fallback for dash-encoded ARN format: arn-aws-eks-<region-part1>-<region-part2>-<region-part3>-...
 	splittedClusterContext := strings.Split(cluster, "-")
 	if len(splittedClusterContext) >= 6 {
 		return strings.Join(splittedClusterContext[3:6], "-"), nil
@@ -142,10 +130,6 @@ func (eksSupport *EKSSupport) GetRegion(cluster string) (string, error) {
 	return "", fmt.Errorf("failed to get region: tried environment variables (KS_CLOUD_REGION, AWS_REGION), AWS config, and cluster name parsing")
 }
 
-// Context can be in one of 3 ways:
-// 1. arn:aws:eks:<region>:<id>:cluster/<cluster_name> --> Usually this will be in context
-// 2. arn:aws:eks:<region>:<id>:cluster-<cluster_name> --> Usually we will get 'cluster' param like this
-// 3. <cluster_name>                                   --> Context name is the cluster name
 func (eksSupport *EKSSupport) GetContextName(cluster string) string {
 	if cluster != "" {
 		splittedCluster := strings.Split(cluster, ".")
@@ -153,7 +137,6 @@ func (eksSupport *EKSSupport) GetContextName(cluster string) string {
 			return splittedCluster[0]
 		}
 	}
-	// Try from context
 	splittedCluster := strings.Split(k8sinterface.GetContextName(), ".")
 	if len(splittedCluster) > 1 {
 		return splittedCluster[0]
@@ -161,7 +144,6 @@ func (eksSupport *EKSSupport) GetContextName(cluster string) string {
 
 	splittedCluster = strings.Split(cluster, ":")
 	if len(splittedCluster) > 5 {
-		// arn:aws:eks:<region>:<id>:cluster-<cluster_name> -> <cluster_name>
 		clusterName := splittedCluster[len(splittedCluster)-1]
 		clusterNameFiltered := strings.Replace(clusterName, "cluster-", "", 1)
 		if clusterName != clusterNameFiltered {
@@ -169,33 +151,27 @@ func (eksSupport *EKSSupport) GetContextName(cluster string) string {
 		}
 	}
 
-	// Try from context
 	splittedCluster = strings.Split(k8sinterface.GetContextName(), "/")
 	if len(splittedCluster) > 1 {
-		// arn:aws:eks:<region>:<id>:cluster/<cluster_name> -> <cluster_name>
 		return splittedCluster[len(splittedCluster)-1]
 	}
 
-	if k8sinterface.GetContextName() == cluster {
+	if cluster != "" {
 		return cluster
 	}
 
 	return ""
 }
 
-// GetEKSCfgMap returns the ConfigMap containing mappings of iam-roles/groups or iam-users/groups
 func (EKSSupport *EKSSupport) GetEKSCfgMap(kapi *k8sinterface.KubernetesApi, namespace string) (*v1.ConfigMap, error) {
-
 	var authData awsAuth
 
 	eksCfgMap, err := kapi.KubernetesClient.CoreV1().ConfigMaps(namespace).Get(context.TODO(), awsauthconfigmap, metav1.GetOptions{})
-
 	if err != nil {
 		return nil, err
 	}
 
 	if mapRoles, ok := eksCfgMap.Data["mapRoles"]; ok {
-
 		if err := json.Unmarshal([]byte(mapRoles), &authData.MapRoles); err != nil {
 			return nil, err
 		}
@@ -204,7 +180,6 @@ func (EKSSupport *EKSSupport) GetEKSCfgMap(kapi *k8sinterface.KubernetesApi, nam
 	}
 
 	if mapUsers, ok := eksCfgMap.Data["mapUsers"]; ok {
-
 		if err := json.Unmarshal([]byte(mapUsers), &authData.MapUsers); err != nil {
 			return nil, err
 		}
@@ -213,12 +188,9 @@ func (EKSSupport *EKSSupport) GetEKSCfgMap(kapi *k8sinterface.KubernetesApi, nam
 	}
 
 	return eksCfgMap, nil
-
 }
 
-// GetDescribeRepositories returns the descriptive info about the repositories in EKS.
 func (eksSupport *EKSSupport) GetDescribeRepositories(region string) (*ecr.DescribeRepositoriesOutput, error) {
-	// Configure region for request
 	awsConfig, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return nil, fmt.Errorf("error: fail to load AWS SDK default %v", err)
@@ -236,9 +208,7 @@ func (eksSupport *EKSSupport) GetDescribeRepositories(region string) (*ecr.Descr
 	return result, nil
 }
 
-// GetListEntitiesForPolicies returns the list of roles in EKS.
 func (eksSupport *EKSSupport) GetListEntitiesForPolicies(region string) (*ListEntitiesForPolicies, error) {
-	// Configure region for request
 	awsConfig, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return nil, fmt.Errorf("error: fail to load AWS SDK default %v", err)
@@ -264,8 +234,6 @@ func (eksSupport *EKSSupport) GetListEntitiesForPolicies(region string) (*ListEn
 	return &ListEntitiesForPolicies{EntitiesForPolicies: allEntitiesForPolicies}, nil
 }
 
-// GetPolicyVersion retrieves policy contents based on their default version.
-// It returns a struct that contains a map where the key is the policy Arn, and the value is its content.
 func (eksSupport *EKSSupport) GetPolicyVersion(region string) (*ListPolicyVersion, error) {
 	awsConfig, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
@@ -274,22 +242,14 @@ func (eksSupport *EKSSupport) GetPolicyVersion(region string) (*ListPolicyVersio
 	awsConfig.Region = region
 	svc := iam.NewFromConfig(awsConfig)
 
-	// retrieve the list of policies currently used on aws.
-	// cmd example: `aws iam list-policies`
 	input := &iam.ListPoliciesInput{}
 	result, err := listPoliciesWithPagination(svc, input)
 	if err != nil {
 		return nil, fmt.Errorf("error: fail to list policies: %v", err)
 	}
-	//result, _ := svc.ListPolicies(context.TODO(), &iam.ListPoliciesInput{
-	//	MaxItems: aws.Int32(1),
-	//})
 
-	// retrieve, for each policy, its content.
-	// cmd example: `aws iam get-policy-version --version-id v3 --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly`
 	policyVersionContents := map[string]*PolicyVersionDocument{}
 	for _, policy := range result {
-		// setup params for GetPolicyVersion function.
 		policyVersionInput := &iam.GetPolicyVersionInput{
 			PolicyArn: policy.Arn,
 			VersionId: policy.DefaultVersionId,
@@ -298,12 +258,10 @@ func (eksSupport *EKSSupport) GetPolicyVersion(region string) (*ListPolicyVersio
 		if err != nil {
 			return nil, fmt.Errorf("error: fail to get policy version: %v", err)
 		}
-		// convert url-data into json-data.
 		policyVersionDocument, err := url.QueryUnescape(*policyVersionContent.PolicyVersion.Document)
 		if err != nil {
 			return nil, fmt.Errorf("error: fail to decode Document field: %v", err)
 		}
-		// convert policyVersionDocument into a struct to make logic on it.
 		pDocument := PolicyVersionDocument{}
 		json.Unmarshal([]byte(policyVersionDocument), &pDocument)
 
@@ -312,9 +270,6 @@ func (eksSupport *EKSSupport) GetPolicyVersion(region string) (*ListPolicyVersio
 	return &ListPolicyVersion{PolicyVersion: policyVersionContents}, nil
 }
 
-// listPoliciesWithPagination iterate over the aws policies.
-// It return the list of the whole policies on aws in case of success.
-// Return an error otherwise.
 func listPoliciesWithPagination(svc *iam.Client, input *iam.ListPoliciesInput) ([]types.Policy, error) {
 	paginator := iam.NewListPoliciesPaginator(svc, input)
 
